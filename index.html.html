@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>免費照片 EXIF 編輯器</title>
+<script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.min.js"></script>
+<style>
+:root{
+  --bg:#0f1115; --panel:rgba(22,25,32,.88); --panel2:rgba(255,255,255,.07);
+  --text:#f7f7f8; --muted:#b9bec8; --accent:#8aa1ff; --danger:#ff6b6b;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;
+  color:var(--text);
+  background:var(--bg);
+  min-height:100vh;
+  background-size:cover;
+  background-position:center;
+  background-attachment:fixed;
+}
+body::before{
+  content:"";
+  position:fixed; inset:0; z-index:-1;
+  background:linear-gradient(180deg,rgba(7,9,13,.68),rgba(7,9,13,.88));
+}
+.wrap{max-width:820px;margin:auto;padding:18px 14px 78px}
+h1{font-size:24px;margin:4px 0 4px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:14px;line-height:1.5}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+button,.btn{
+  border:0;border-radius:12px;padding:11px 14px;background:var(--panel2);color:var(--text);
+  font-size:15px;font-weight:650;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)
+}
+button.primary{background:var(--accent);color:#081020}
+button.danger{background:rgba(255,107,107,.16);color:#ffd5d5}
+.card{
+  background:var(--panel); border:1px solid rgba(255,255,255,.10); border-radius:18px;
+  padding:14px; margin:12px 0; box-shadow:0 12px 36px rgba(0,0,0,.20);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)
+}
+.card h2{font-size:17px;margin:0 0 12px}
+.drop{
+  border:1.5px dashed rgba(255,255,255,.25);border-radius:16px;padding:22px;text-align:center;
+  background:rgba(255,255,255,.035)
+}
+.preview{display:none;margin-top:12px}
+.preview img{width:100%;max-height:360px;object-fit:contain;border-radius:14px;background:#000}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.full{grid-column:1/-1}
+label{font-size:12px;color:var(--muted);display:block;margin:0 0 5px}
+input,select{
+  width:100%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.07);
+  color:var(--text);border-radius:11px;padding:11px;font-size:15px;outline:none
+}
+option{color:#111}
+.pills{display:flex;gap:7px;flex-wrap:wrap}
+.pills button{font-size:13px;padding:9px 11px}
+.status{font-size:13px;color:var(--muted);min-height:20px;margin-top:8px;line-height:1.5}
+.small{font-size:12px;color:var(--muted);line-height:1.5}
+.badge{
+  display:inline-block;font-size:12px;padding:5px 8px;border-radius:999px;
+  background:rgba(138,161,255,.15);color:#dfe5ff;margin-top:8px
+}
+hr{border:0;border-top:1px solid rgba(255,255,255,.08);margin:14px 0}
+.sticky{
+  position:sticky;bottom:8px;display:flex;gap:8px;background:rgba(15,17,21,.78);
+  border:1px solid rgba(255,255,255,.08);padding:8px;border-radius:16px;backdrop-filter:blur(18px)
+}
+.sticky button{flex:1}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.full{grid-column:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📷 免費照片 EXIF 編輯器</h1>
+  <div class="sub">支援 JPG / JPEG / PNG 截圖。PNG 會自動轉成高畫質 JPG，再寫入 EXIF。全部在手機瀏覽器內處理。</div>
+
+  <div class="toolbar">
+    <label class="btn">🖼️ 自選背景<input id="bgPick" type="file" accept="image/*" hidden></label>
+    <button id="clearBg">移除背景</button>
+    <button id="resetAll">全部清空</button>
+  </div>
+
+  <div class="card">
+    <h2>1. 選擇照片或截圖</h2>
+    <div class="drop">
+      <label class="btn">選擇 JPG / PNG<input id="filePick" type="file" accept="image/jpeg,image/png" hidden></label>
+      <div class="small" style="margin-top:10px">
+        iPhone 截圖、Android 截圖的 PNG 都可以直接選。<br>
+        PNG 若有透明區域，轉 JPG 時會以白色背景補上。
+      </div>
+    </div>
+    <div class="preview" id="preview">
+      <img id="imgPreview" alt="">
+      <div id="formatBadge" class="badge"></div>
+      <div class="status" id="fileInfo"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. 裝置預設</h2>
+    <div class="pills">
+      <button data-preset="iphone16">🍎 iPhone 16 Pro</button>
+      <button data-preset="iphone15">🍎 iPhone 15 Pro</button>
+      <button data-preset="xiaomi14">小米 14</button>
+      <button data-preset="oppo">OPPO Find X7</button>
+      <button data-preset="vivo">vivo X100</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. EXIF 資料</h2>
+    <div class="grid">
+      <div class="full"><label>拍攝時間</label><input id="dt" type="datetime-local"></div>
+      <div><label>設備廠商</label><input id="make" placeholder="Apple"></div>
+      <div><label>設備型號</label><input id="model" placeholder="iPhone 16 Pro"></div>
+      <div class="full"><label>鏡頭型號</label><input id="lens" placeholder="iPhone 16 Pro back camera 6.86mm f/1.78"></div>
+      <div><label>焦距 (mm)</label><input id="focal" type="number" step="0.01" placeholder="6.86"></div>
+      <div><label>35mm 等效焦距</label><input id="focal35" type="number" step="1" placeholder="24"></div>
+      <div><label>光圈 (f/)</label><input id="fnum" type="number" step="0.01" placeholder="1.78"></div>
+      <div><label>ISO</label><input id="iso" type="number" step="1" placeholder="100"></div>
+      <div><label>快門速度（秒）</label><input id="shutter" placeholder="1/120"></div>
+      <div><label>曝光補償 EV</label><input id="ev" type="number" step="0.1" placeholder="0"></div>
+      <div><label>EXIF 寬度</label><input id="width" type="number" placeholder="1179"></div>
+      <div><label>EXIF 高度</label><input id="height" type="number" placeholder="2556"></div>
+    </div>
+
+    <hr>
+
+    <div class="pills">
+      <button data-res="1179,2556">iPhone 截圖 1179×2556</button>
+      <button data-res="1290,2796">iPhone Max 1290×2796</button>
+      <button data-res="4032,3024">12MP 4032×3024</button>
+      <button data-res="5712,4284">24MP 5712×4284</button>
+      <button data-res="8064,6048">48MP 8064×6048</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. GPS 位置</h2>
+    <div class="grid">
+      <div><label>緯度 Latitude</label><input id="lat" type="number" step="0.000001" placeholder="25.033964"></div>
+      <div><label>經度 Longitude</label><input id="lng" type="number" step="0.000001" placeholder="121.564468"></div>
+      <div class="full">
+        <button id="useGps">使用目前位置</button>
+        <button id="clearGps">清除 GPS</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>5. 輸出設定</h2>
+    <div class="grid">
+      <div><label>JPG 品質</label>
+        <select id="quality">
+          <option value="1">100% 極高畫質</option>
+          <option value="0.95" selected>95% 高畫質</option>
+          <option value="0.9">90%</option>
+          <option value="0.85">85%</option>
+        </select>
+      </div>
+      <div><label>額外增加 MB</label><input id="padMb" type="number" min="0" step="0.1" value="0"></div>
+    </div>
+    <div class="pills" style="margin-top:10px">
+      <button data-pad="2.5">+2.5MB</button>
+      <button data-pad="3.5">+3.5MB</button>
+      <button data-pad="5">+5MB</button>
+    </div>
+    <div class="small" style="margin-top:8px">增加 MB 只會在檔案尾端加入空白資料，不會提升照片畫質。</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="sticky">
+    <button class="danger" id="clearForm">清空資料</button>
+    <button class="primary" id="exportBtn">匯出 JPG</button>
+  </div>
+</div>
+
+<script>
+let currentFile=null;
+let currentDataUrl=null;
+let normalizedJpegDataUrl=null;
+let originalType='';
+
+const $=id=>document.getElementById(id);
+const setStatus=t=>$('status').textContent=t;
+
+function gcd(a,b){return b?gcd(b,a%b):a}
+
+function rat(n,d=1){
+  n=Number(n)||0;
+  d=Number(d)||1;
+  const scale=10000;
+  const a=Math.round(n*scale);
+  const b=Math.round(d*scale);
+  const g=gcd(Math.abs(a),Math.abs(b))||1;
+  return [a/g,b/g];
+}
+
+function decToDmsRational(dec){
+  const abs=Math.abs(dec);
+  const deg=Math.floor(abs);
+  const minF=(abs-deg)*60;
+  const min=Math.floor(minF);
+  const sec=(minF-min)*60;
+  return [[deg,1],[min,1],[Math.round(sec*10000),10000]];
+}
+
+function parseShutter(v){
+  v=(v||'').trim();
+  if(!v)return null;
+  if(v.includes('/')){
+    const [a,b]=v.split('/').map(Number);
+    if(a>0&&b>0)return [a,b];
+  }
+  const n=Number(v);
+  if(n>0)return rat(n);
+  return null;
+}
+
+function dateExif(v){
+  if(!v)return null;
+  const d=new Date(v);
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}:${p(d.getMonth()+1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function fileToDataURL(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function loadImage(src){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>res(img);
+    img.onerror=rej;
+    img.src=src;
+  });
+}
+
+async function normalizeToJpeg(dataUrl, quality=0.95){
+  const img=await loadImage(dataUrl);
+  const canvas=document.createElement('canvas');
+  canvas.width=img.naturalWidth;
+  canvas.height=img.naturalHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0);
+  return canvas.toDataURL('image/jpeg',quality);
+}
+
+$('filePick').addEventListener('change', async e=>{
+  currentFile=e.target.files[0];
+  if(!currentFile)return;
+
+  originalType=currentFile.type;
+  currentDataUrl=await fileToDataURL(currentFile);
+
+  $('imgPreview').src=currentDataUrl;
+  $('preview').style.display='block';
+
+  const img=await loadImage(currentDataUrl);
+  $('width').value=img.naturalWidth;
+  $('height').value=img.naturalHeight;
+
+  if(originalType==='image/png'){
+    $('formatBadge').textContent='PNG 截圖 → 匯出時自動轉 JPG';
+    normalizedJpegDataUrl=await normalizeToJpeg(currentDataUrl,Number($('quality').value));
+  }else{
+    $('formatBadge').textContent='JPG / JPEG';
+    normalizedJpegDataUrl=currentDataUrl;
+  }
+
+  $('fileInfo').textContent=`${currentFile.name} ・ ${(currentFile.size/1024/1024).toFixed(2)} MB ・ ${img.naturalWidth}×${img.naturalHeight}`;
+  setStatus('照片已載入，可以開始修改 EXIF。');
+});
+
+$('quality').addEventListener('change',async()=>{
+  if(currentDataUrl && originalType==='image/png'){
+    normalizedJpegDataUrl=await normalizeToJpeg(currentDataUrl,Number($('quality').value));
+    setStatus('已更新 PNG 轉 JPG 的輸出品質。');
+  }
+});
+
+$('bgPick').addEventListener('change',async e=>{
+  const f=e.target.files[0];
+  if(!f)return;
+  const url=await fileToDataURL(f);
+  document.body.style.backgroundImage=`url("${url}")`;
+  try{localStorage.setItem('customBg',url)}catch(err){}
+});
+
+$('clearBg').onclick=()=>{
+  document.body.style.backgroundImage='';
+  localStorage.removeItem('customBg');
+};
+
+try{
+  const savedBg=localStorage.getItem('customBg');
+  if(savedBg)document.body.style.backgroundImage=`url("${savedBg}")`;
+}catch(err){}
+
+const presets={
+  iphone16:{make:'Apple',model:'iPhone 16 Pro',lens:'iPhone 16 Pro back camera 6.86mm f/1.78',focal:'6.86',focal35:'24',fnum:'1.78',iso:'100'},
+  iphone15:{make:'Apple',model:'iPhone 15 Pro',lens:'iPhone 15 Pro back camera 6.86mm f/1.78',focal:'6.86',focal35:'24',fnum:'1.78',iso:'100'},
+  xiaomi14:{make:'Xiaomi',model:'Xiaomi 14',lens:'Xiaomi 14 rear camera',focal:'6.70',focal35:'23',fnum:'1.6',iso:'100'},
+  oppo:{make:'OPPO',model:'Find X7',lens:'Find X7 rear camera',focal:'6.59',focal35:'24',fnum:'1.6',iso:'100'},
+  vivo:{make:'vivo',model:'vivo X100',lens:'vivo X100 rear camera',focal:'6.64',focal35:'23',fnum:'1.57',iso:'100'}
+};
+
+document.querySelectorAll('[data-preset]').forEach(b=>{
+  b.onclick=()=>{
+    const p=presets[b.dataset.preset];
+    Object.entries(p).forEach(([k,v])=>$(k).value=v);
+  };
+});
+
+document.querySelectorAll('[data-res]').forEach(b=>{
+  b.onclick=()=>{
+    const [w,h]=b.dataset.res.split(',');
+    $('width').value=w;
+    $('height').value=h;
+  };
+});
+
+document.querySelectorAll('[data-pad]').forEach(b=>{
+  b.onclick=()=>$('padMb').value=b.dataset.pad;
+});
+
+$('useGps').onclick=()=>{
+  if(!navigator.geolocation){
+    setStatus('此瀏覽器不支援定位。');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    p=>{
+      $('lat').value=p.coords.latitude.toFixed(6);
+      $('lng').value=p.coords.longitude.toFixed(6);
+      setStatus('已取得目前位置。');
+    },
+    ()=>setStatus('定位失敗或沒有授權。'),
+    {enableHighAccuracy:true,timeout:10000}
+  );
+};
+
+$('clearGps').onclick=()=>{
+  $('lat').value='';
+  $('lng').value='';
+};
+
+function clearFields(){
+  ['dt','make','model','lens','focal','focal35','fnum','iso','shutter','ev','width','height','lat','lng']
+    .forEach(id=>$(id).value='');
+  $('padMb').value='0';
+}
+
+$('clearForm').onclick=clearFields;
+
+$('resetAll').onclick=()=>{
+  currentFile=null;
+  currentDataUrl=null;
+  normalizedJpegDataUrl=null;
+  originalType='';
+  $('filePick').value='';
+  $('preview').style.display='none';
+  clearFields();
+  setStatus('已全部清空。');
+};
+
+$('exportBtn').onclick=async()=>{
+  if(!currentDataUrl){
+    setStatus('請先選一張 JPG 或 PNG。');
+    return;
+  }
+
+  try{
+    let workingJpeg;
+
+    if(originalType==='image/png'){
+      workingJpeg=await normalizeToJpeg(currentDataUrl,Number($('quality').value));
+    }else{
+      workingJpeg=currentDataUrl;
+    }
+
+    let exifObj;
+    try{
+      exifObj=piexif.load(workingJpeg);
+    }catch(e){
+      exifObj={"0th":{},Exif:{},GPS:{},Interop:{},thumbnail:null};
+    }
+
+    exifObj["0th"]=exifObj["0th"]||{};
+    exifObj.Exif=exifObj.Exif||{};
+    exifObj.GPS=exifObj.GPS||{};
+
+    if($('make').value) exifObj["0th"][piexif.ImageIFD.Make]=$('make').value;
+    if($('model').value) exifObj["0th"][piexif.ImageIFD.Model]=$('model').value;
+    if($('lens').value) exifObj.Exif[piexif.ExifIFD.LensModel]=$('lens').value;
+
+    const dt=dateExif($('dt').value);
+    if(dt){
+      exifObj["0th"][piexif.ImageIFD.DateTime]=dt;
+      exifObj.Exif[piexif.ExifIFD.DateTimeOriginal]=dt;
+      exifObj.Exif[piexif.ExifIFD.DateTimeDigitized]=dt;
+    }
+
+    if($('focal').value) exifObj.Exif[piexif.ExifIFD.FocalLength]=rat(Number($('focal').value));
+    if($('focal35').value) exifObj.Exif[piexif.ExifIFD.FocalLengthIn35mmFilm]=Number($('focal35').value);
+    if($('fnum').value) exifObj.Exif[piexif.ExifIFD.FNumber]=rat(Number($('fnum').value));
+    if($('iso').value) exifObj.Exif[piexif.ExifIFD.ISOSpeedRatings]=Number($('iso').value);
+
+    const sh=parseShutter($('shutter').value);
+    if(sh) exifObj.Exif[piexif.ExifIFD.ExposureTime]=sh;
+
+    if($('ev').value!=='') exifObj.Exif[piexif.ExifIFD.ExposureBiasValue]=rat(Number($('ev').value));
+    if($('width').value) exifObj.Exif[piexif.ExifIFD.PixelXDimension]=Number($('width').value);
+    if($('height').value) exifObj.Exif[piexif.ExifIFD.PixelYDimension]=Number($('height').value);
+
+    const lat=Number($('lat').value);
+    const lng=Number($('lng').value);
+
+    if(Number.isFinite(lat)&&Number.isFinite(lng)&&$('lat').value!==''&&$('lng').value!==''){
+      exifObj.GPS[piexif.GPSIFD.GPSLatitudeRef]=lat>=0?'N':'S';
+      exifObj.GPS[piexif.GPSIFD.GPSLatitude]=decToDmsRational(lat);
+      exifObj.GPS[piexif.GPSIFD.GPSLongitudeRef]=lng>=0?'E':'W';
+      exifObj.GPS[piexif.GPSIFD.GPSLongitude]=decToDmsRational(lng);
+    }
+
+    const exifBytes=piexif.dump(exifObj);
+    const outDataUrl=piexif.insert(exifBytes,workingJpeg);
+
+    let blob=await (await fetch(outDataUrl)).blob();
+
+    const pad=Math.max(0,Number($('padMb').value)||0);
+    if(pad>0){
+      const filler=new Uint8Array(Math.round(pad*1024*1024));
+      blob=new Blob([blob,filler],{type:'image/jpeg'});
+    }
+
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const base=(currentFile?.name||'photo').replace(/\.[^.]+$/,'');
+    a.href=url;
+    a.download=`${base}_edited.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+    setStatus(`完成：${(blob.size/1024/1024).toFixed(2)} MB，已匯出 JPG。`);
+  }catch(err){
+    console.error(err);
+    setStatus('匯出失敗：'+err.message);
+  }
+};
+</script>
+</body>
+</html>
