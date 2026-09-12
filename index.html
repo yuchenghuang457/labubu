@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>免費照片 EXIF 編輯器</title>
+<title>免費照片 EXIF 編輯器｜品牌型號版</title>
 <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.min.js"></script>
 <style>
 :root{
@@ -102,12 +102,19 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.08);margin:14px 0}
 
   <div class="card">
     <h2>2. 裝置預設</h2>
-    <div class="pills">
-      <button data-preset="iphone16">🍎 iPhone 16 Pro</button>
-      <button data-preset="iphone15">🍎 iPhone 15 Pro</button>
-      <button data-preset="xiaomi14">小米 14</button>
-      <button data-preset="oppo">OPPO Find X7</button>
-      <button data-preset="vivo">vivo X100</button>
+    <div class="small">先選品牌，再選型號（新 → 舊）。</div>
+    <div class="pills" id="brands" style="margin-top:10px">
+      <button data-brand="apple">🍎 Apple</button><button data-brand="xiaomi">小米</button>
+      <button data-brand="samsung">Samsung</button><button data-brand="oppo">OPPO</button>
+      <button data-brand="vivo">vivo</button><button data-brand="google">Google</button>
+      <button data-brand="other">其他 / 自訂</button>
+    </div>
+    <div id="deviceBox" style="display:none;margin-top:14px">
+      <label>手機型號</label><select id="deviceSelect"><option value="">請選擇型號</option></select>
+      <div id="cameraBox" style="display:none;margin-top:10px">
+        <label>鏡頭</label><select id="cameraSelect"></select>
+      </div>
+      <div class="status" id="deviceStatus"></div>
     </div>
   </div>
 
@@ -310,20 +317,60 @@ try{
   if(savedBg)document.body.style.backgroundImage=`url("${savedBg}")`;
 }catch(err){}
 
-const presets={
-  iphone16:{make:'Apple',model:'iPhone 16 Pro',lens:'iPhone 16 Pro back camera 6.86mm f/1.78',focal:'6.86',focal35:'24',fnum:'1.78',iso:'100'},
-  iphone15:{make:'Apple',model:'iPhone 15 Pro',lens:'iPhone 15 Pro back camera 6.86mm f/1.78',focal:'6.86',focal35:'24',fnum:'1.78',iso:'100'},
-  xiaomi14:{make:'Xiaomi',model:'Xiaomi 14',lens:'Xiaomi 14 rear camera',focal:'6.70',focal35:'23',fnum:'1.6',iso:'100'},
-  oppo:{make:'OPPO',model:'Find X7',lens:'Find X7 rear camera',focal:'6.59',focal35:'24',fnum:'1.6',iso:'100'},
-  vivo:{make:'vivo',model:'vivo X100',lens:'vivo X100 rear camera',focal:'6.64',focal35:'23',fnum:'1.57',iso:'100'}
+const catalog={
+apple:["iPhone 17 Pro Max","iPhone 17 Pro","iPhone 17","iPhone Air","iPhone 16e","iPhone 16 Pro Max","iPhone 16 Pro","iPhone 16 Plus","iPhone 16","iPhone 15 Pro Max","iPhone 15 Pro","iPhone 15 Plus","iPhone 15","iPhone 14 Pro Max","iPhone 14 Pro","iPhone 14 Plus","iPhone 14","iPhone SE (3rd generation)","iPhone 13 Pro Max","iPhone 13 Pro","iPhone 13","iPhone 13 mini","iPhone 12 Pro Max","iPhone 12 Pro","iPhone 12","iPhone 12 mini","iPhone SE (2nd generation)","iPhone 11 Pro Max","iPhone 11 Pro","iPhone 11","iPhone XS Max","iPhone XS","iPhone XR","iPhone X","iPhone 8 Plus","iPhone 8","iPhone 7 Plus","iPhone 7","iPhone SE (1st generation)","iPhone 6s Plus","iPhone 6s","iPhone 6 Plus","iPhone 6","iPhone 5s","iPhone 5c","iPhone 5"],
+xiaomi:["Xiaomi 17 Ultra","Xiaomi 17 Pro Max","Xiaomi 17 Pro","Xiaomi 17","Xiaomi 15 Ultra","Xiaomi 15 Pro","Xiaomi 15","Xiaomi 14 Ultra","Xiaomi 14 Pro","Xiaomi 14","Xiaomi 13 Ultra","Xiaomi 13 Pro","Xiaomi 13","Xiaomi 12S Ultra","Xiaomi 12 Pro","Xiaomi 12","Mi 11 Ultra","Mi 11 Pro","Mi 11","Mi 10 Ultra","Mi 10 Pro","Mi 10","Mi 9","Mi 8","Mi 6","Mi 5"],
+samsung:["Galaxy S26 Ultra","Galaxy S26+","Galaxy S26","Galaxy S25 Ultra","Galaxy S25+","Galaxy S25","Galaxy S24 Ultra","Galaxy S24+","Galaxy S24","Galaxy S23 Ultra","Galaxy S23+","Galaxy S23","Galaxy S22 Ultra","Galaxy S22+","Galaxy S22","Galaxy S21 Ultra","Galaxy S21+","Galaxy S21","Galaxy S20 Ultra","Galaxy S20+","Galaxy S20","Galaxy S10+","Galaxy S10","Galaxy S9+","Galaxy S9","Galaxy S8+","Galaxy S8","Galaxy S7","Galaxy S6","Galaxy S5"],
+oppo:["Find X9 Pro","Find X9","Find X8 Ultra","Find X8 Pro","Find X8","Find X7 Ultra","Find X7","Find X6 Pro","Find X6","Find X5 Pro","Find X5","Find X3 Pro","Find X3","Find X2 Pro","Find X2","Find X"],
+vivo:["X300 Ultra","X300 Pro","X300","X200 Ultra","X200 Pro","X200","X100 Ultra","X100 Pro","X100","X90 Pro+","X90 Pro","X90","X80 Pro","X80","X70 Pro+","X70 Pro","X70","X60 Pro","X60"],
+google:["Pixel 10 Pro XL","Pixel 10 Pro","Pixel 10","Pixel 9 Pro XL","Pixel 9 Pro","Pixel 9","Pixel 8 Pro","Pixel 8","Pixel 7 Pro","Pixel 7","Pixel 6 Pro","Pixel 6","Pixel 5","Pixel 4 XL","Pixel 4","Pixel 3 XL","Pixel 3","Pixel 2 XL","Pixel 2","Pixel XL","Pixel"],
+other:[]
 };
-
-document.querySelectorAll('[data-preset]').forEach(b=>{
-  b.onclick=()=>{
-    const p=presets[b.dataset.preset];
-    Object.entries(p).forEach(([k,v])=>$(k).value=v);
-  };
+const makers={apple:"Apple",xiaomi:"Xiaomi",samsung:"samsung",oppo:"OPPO",vivo:"vivo",google:"Google"};
+const cameras={
+apple:[["主鏡頭","back camera",24,1.78],["超廣角","ultra wide camera",13,2.2],["望遠","telephoto camera",77,2.8]],
+xiaomi:[["主鏡頭","main camera",23,1.6],["超廣角","ultra wide camera",14,2.2],["望遠","telephoto camera",75,2.0]],
+samsung:[["主鏡頭","rear main camera",24,1.7],["超廣角","ultra wide camera",13,2.2],["望遠","telephoto camera",70,2.4]],
+oppo:[["主鏡頭","main camera",24,1.6],["超廣角","ultra wide camera",15,2.0],["望遠","telephoto camera",65,2.6]],
+vivo:[["主鏡頭","main camera",23,1.6],["超廣角","ultra wide camera",15,2.0],["望遠","telephoto camera",70,2.5]],
+google:[["主鏡頭","wide camera",25,1.7],["超廣角","ultrawide camera",13,2.2],["望遠","telephoto camera",120,2.8]]
+};
+let activeBrand="", activeModel="";
+function applyCamera(){
+  if(!activeModel||activeBrand==="other")return;
+  const c=(cameras[activeBrand]||[])[Number($('cameraSelect').value)||0];
+  $('make').value=makers[activeBrand]||"";
+  $('model').value=activeModel;
+  if(c){
+    $('lens').value=activeModel+" "+c[1];
+    $('focal35').value=c[2]; $('fnum').value=c[3];
+    $('focal').value="";
+  }
+  if(!$('iso').value)$('iso').value="100";
+  $('deviceStatus').textContent="已套用 "+activeModel+"・"+(c?c[0]:"")+"；欄位仍可手動修改。";
+}
+document.querySelectorAll('[data-brand]').forEach(btn=>btn.onclick=()=>{
+  activeBrand=btn.dataset.brand; activeModel="";
+  document.querySelectorAll('[data-brand]').forEach(x=>x.style.outline="");
+  btn.style.outline="2px solid var(--accent)";
+  $('deviceBox').style.display="block"; $('cameraBox').style.display="none";
+  const sel=$('deviceSelect'); sel.innerHTML='<option value="">請選擇型號</option>';
+  if(activeBrand==="other"){
+    sel.innerHTML='<option value="custom">自訂品牌 / 型號</option>';
+    $('deviceStatus').textContent="請直接在下方 EXIF 欄位輸入廠商、型號與鏡頭。"; return;
+  }
+  catalog[activeBrand].forEach(m=>{const o=document.createElement("option");o.value=m;o.textContent=m;sel.appendChild(o)});
+  $('deviceStatus').textContent="共 "+catalog[activeBrand].length+" 個型號";
 });
+$('deviceSelect').addEventListener('change',()=>{
+  if(activeBrand==="other")return;
+  activeModel=$('deviceSelect').value;
+  if(!activeModel){$('cameraBox').style.display="none";return}
+  const cs=$('cameraSelect');cs.innerHTML="";
+  (cameras[activeBrand]||[]).forEach((c,i)=>{const o=document.createElement("option");o.value=i;o.textContent=c[0];cs.appendChild(o)});
+  $('cameraBox').style.display="block"; applyCamera();
+});
+$('cameraSelect').addEventListener('change',applyCamera);
 
 document.querySelectorAll('[data-res]').forEach(b=>{
   b.onclick=()=>{
